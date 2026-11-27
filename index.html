@@ -102,7 +102,7 @@ input[type=number],select{font:inherit;color:var(--ink);background:var(--bg);bor
 .stack{display:flex;flex-direction:column;gap:8px;margin-top:18px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 .tabs{display:flex;gap:6px;position:relative;z-index:1;margin-bottom:-1px}
-.tabs button{border:1px solid var(--line);border-bottom:0;background:var(--bg);border-radius:6px 6px 0 0;padding:10px 4px;flex:1;font-size:14px;min-height:44px;font-weight:500;color:var(--sub)}
+.tabs button{border:1px solid var(--line);border-bottom:0;background:var(--bg);border-radius:6px 6px 0 0;padding:10px 4px;flex:1;font-size:13px;min-height:44px;font-weight:500;color:var(--sub)}
 .tabs button[aria-selected=true]{background:var(--paper);color:var(--ink);font-weight:700}
 .panel{border-top-left-radius:0}
 .plan-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:20px}
@@ -153,6 +153,13 @@ details.rules li{margin:6px 0}
 .sset{border-top:1px solid var(--line);padding-top:12px;margin-top:18px}
 .sset h3{font-size:16px;margin:0 0 6px}
 .thrset{margin-top:4px}
+.headr{display:flex;gap:8px;align-items:flex-start;flex:none}
+.acct{height:46px;max-width:150px;border:1px solid var(--line);background:var(--paper);color:var(--ink);border-radius:23px;padding:0 14px;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:6px}
+table.rank{border-collapse:collapse;width:100%}
+table.rank th,table.rank td{border-bottom:1px solid var(--rule);padding:6px 8px;text-align:left}
+table.rank td:last-child,table.rank th:last-child{text-align:right}
+table.rank tr.me td{background:var(--tint-green);font-weight:700}
+.scroll{overflow-x:auto}
 </style>
 </head>
 <body>
@@ -202,7 +209,7 @@ const mkEntry=(book,item,kind,loop)=>({book,item,key:book.id+'|'+item[1],kind,lo
 
 
 /* ===== 共有: 学習データの形式・集計(アプリと分析ツールで同じコード) ===== */
-const CSVCOLS=['t','q','u','grp','ss','d','b','n','w','m','k','lp','g','ok','s','gp','r0','iv','dn','ai','ov','ct'];
+const CSVCOLS=['t','q','u','grp','ss','d','b','n','w','m','k','lp','g','ok','s','gp','r0','iv','dn','ai','ov','ct','ac'];
 const CSVNUM=new Set(['t','q','n','lp','ok','s','gp','r0','iv','dn','ai','ov','ct']);
 function csvCell(v){if(v===undefined||v===null)return '';const s=String(v);return /[",\r\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s}
 function toCSV(evs){return [CSVCOLS.join(',')].concat(evs.map(e=>CSVCOLS.map(c=>csvCell(e[c])).join(','))).join('\n')}
@@ -235,13 +242,14 @@ const IVB=[['5〜7日',5,7],['8〜14日',8,14],['15〜29日',15,29],['30日以�
 const median=a=>{if(!a.length)return null;const b=a.slice().sort((x,y)=>x-y),m=b.length>>1;return b.length%2?b[m]:(b[m-1]+b[m])/2};
 const mean=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:null;
 function analyze(evs,opt){
+  const L=e=>e.ac||e.u;   // 同じアカウントの複数の端末は、1人として数える
   opt=opt||{};const CD=opt.consolDays||5, DAYMS=86400000;
   const out={n:evs.length,learners:0,sN:0,fN:0,tN:0,dist:{S:0,A:0,H:0,X:0},acc:null,meanSecOk:null,medSecOk:null,
     pairs:0,reached:0,reachRate:null,agedPairs:0,agedReached:0,agedRate:null,meanAttempts:null,medAttempts:null,
     done:0,doneRate:null,ctLearners:0,byFirst:{},retention:[],words:[],users:[],
     tests:{sessions:0,n:0,ok:0,rate:null,meanRate:null,byIv:[],list:[]}};
   const lastT=new Map(),uN=new Map(),ctU=new Set();
-  for(const e of evs){if(e.ct===1)ctU.add(e.u);uN.set(e.u,(uN.get(e.u)||0)+1);if(!(lastT.get(e.u)>=e.t))lastT.set(e.u,e.t);
+  for(const e of evs){if(e.ct===1)ctU.add(L(e));uN.set(L(e),(uN.get(L(e))||0)+1);if(!(lastT.get(L(e))>=e.t))lastT.set(L(e),e.t);
     if(e.m==='s')out.sN++;else if(e.m==='f')out.fN++;else if(e.m==='t')out.tN++}
   out.learners=uN.size;out.ctLearners=ctU.size;
   const s=evs.filter(e=>e.m==='s').sort((a,b)=>(a.t-b.t)||(a.q-b.q));
@@ -253,13 +261,13 @@ function analyze(evs,opt){
     if(e.ok){okN++;if(e.s!=null)okSecs.push(e.s)}
     const wk=e.d+'|'+e.b+'|'+e.w;
     let w=words.get(wk);if(!w){w={d:e.d,b:e.b,w:e.w,n:0,ok:0,secs:[],S:0,A:0,H:0,X:0,users:new Set(),nt:0,okt:0};words.set(wk,w)}
-    w.n++;if(e.ok){w.ok++;if(e.s!=null)w.secs.push(e.s)}w[e.g]=(w[e.g]||0)+1;w.users.add(e.u);
-    const pk=e.u+'|'+wk;
-    let p=pairs.get(pk);if(!p){p={u:e.u,first:e.t,firstG:e.g,n:0,reached:false,attemptsTo:null,done:false};pairs.set(pk,p)}
+    w.n++;if(e.ok){w.ok++;if(e.s!=null)w.secs.push(e.s)}w[e.g]=(w[e.g]||0)+1;w.users.add(L(e));
+    const pk=L(e)+'|'+wk;
+    let p=pairs.get(pk);if(!p){p={u:L(e),first:e.t,firstG:e.g,n:0,reached:false,attemptsTo:null,done:false};pairs.set(pk,p)}
     p.n++;
     if(!p.reached&&((e.iv!=null&&e.iv>=CD)||e.dn===1)){p.reached=true;p.attemptsTo=p.n}
     if(e.dn===1)p.done=true;
-    let u=users.get(e.u);if(!u){u={u:e.u,n:0,ok:0,pairs:0,reached:0};users.set(e.u,u)}
+    let u=users.get(L(e));if(!u){u={u:L(e),n:0,ok:0,pairs:0,reached:0};users.set(L(e),u)}
     u.n++;if(e.ok)u.ok++;
     if(e.k==='r'&&!e.lp&&e.gp!=null){for(const b of rt)if(e.gp>=b.lo&&e.gp<=b.hi){b.n++;if(e.ok)b.ok++;break}}
   }
@@ -283,7 +291,7 @@ function analyze(evs,opt){
   // 確認テスト
   const t=evs.filter(e=>e.m==='t'),ses=new Map(),ib=IVB.map(b=>({label:b[0],lo:b[1],hi:b[2],n:0,ok:0}));
   for(const e of t){
-    const k=e.u+'|'+(e.ss||'');let x=ses.get(k);if(!x){x={u:e.u,t:e.t,d:e.d,n:0,ok:0};ses.set(k,x)}
+    const k=L(e)+'|'+(e.ss||'');let x=ses.get(k);if(!x){x={u:L(e),t:e.t,d:e.d,n:0,ok:0};ses.set(k,x)}
     x.n++;if(e.ok)x.ok++;if(e.t<x.t)x.t=e.t;
     if(e.iv!=null)for(const b of ib)if(e.iv>=b.lo&&e.iv<=b.hi){b.n++;if(e.ok)b.ok++;break}
     const wk=e.d+'|'+e.b+'|'+e.w,w=words.get(wk);if(w){w.nt++;if(e.ok)w.okt++}
@@ -297,7 +305,7 @@ function analyze(evs,opt){
 }
 
 /* ---------- 学習データの記録(同意した人だけ) ---------- */
-const COLLECT_URL='https://script.google.com/macros/s/AKfycbxM3MVF0R_mPGmUNxqO3XOoeD65iLjjKFqIXTfKKuE6vNaKu8-6mUKt939LiP7tpQW0TQ/exec';   // 学習データの自動送信先(Google Apps Script のウェブアプリURL)。空なら送信しません
+const COLLECT_URL='https://script.google.com/macros/s/AKfycbw-tuNhERHLc4Vq6lkWcoJQGvCyv_QfSpSJJnNyjTBhNqPpr7Hbr0eCYARisZUGq2d7Dw/exec';   // 学習データの自動送信先(Google Apps Script のウェブアプリURL)。空なら送信しません
 const LEARNERKEY='eitango-kakitori:learner', LOGMETA='eitango-kakitori:logmeta', LOGC='eitango-kakitori:logc:', TESTKEY='eitango-kakitori:tests1';
 const CHUNK=500, MAXCHUNKS=24, CONSOL_DAYS=5;
 const rid=n=>{
@@ -318,7 +326,7 @@ const saveTests=()=>lsSet(TESTKEY,testHist.slice(-100));
 function chunkArr(i){return (curChunk&&curChunk.idx===i)?curChunk.arr:loadChunk(i)}
 function logEvent(ev){
   if(learner.consent!==true)return null;
-  ev.u=learner.id;ev.q=++logMeta.seq;if(learner.group)ev.grp=learner.group;
+  ev.u=learner.id;ev.q=++logMeta.seq;if(learner.group)ev.grp=learner.group;if(acct&&acct.id)ev.ac=acct.id;
   if(!curChunk||curChunk.idx!==logMeta.cur)curChunk={idx:logMeta.cur,arr:loadChunk(logMeta.cur)};
   curChunk.arr.push(ev);lsSet(LOGC+curChunk.idx,curChunk.arr);
   if(curChunk.arr.length>=CHUNK){
@@ -342,13 +350,20 @@ function clearEvents(){
 let uploading=false;
 async function flushUpload(){
   if(!COLLECT_URL||learner.consent!==true||uploading)return;
+  if(acct&&acct.expired)return;   // ログインが切れている間は、送らずにためておく(匿名で送ると、ランキングに反映されないため)
   const pend=allEvents().filter(e=>e.q>logMeta.sentTo);
   if(!pend.length)return;
   uploading=true;
   try{
     for(let i=0;i<pend.length;i+=200){
       const part=pend.slice(i,i+200);
-      await fetch(COLLECT_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({v:1,rows:part})});
+      if(acct&&acct.tok){
+        const r=await api('rows',{tok:acct.tok,acct:acct.id,rows:part});
+        if(r&&r.err==='bad_token'){acct.expired=true;saveAcct();break}
+        if(!r||!r.ok)break;   // 失敗したら、あとでもう一度送る
+      }else{
+        await fetch(COLLECT_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({v:1,rows:part})});
+      }
       logMeta.sentTo=part[part.length-1].q;saveMeta();
     }
   }catch(e){}finally{uploading=false}
@@ -366,33 +381,35 @@ async function saveFile(name,text,type){
 }
 
 /* ---------- 判定(回答時間) ---------- */
-const DEF_THR={je:{sb:3,sc:0.3,ab:5,ac:0.6},ej:{sb:6,sc:0.3,ab:10,ac:0.6}};
+const DEF_THR={je:{sb:1.5,sc:0.25,ab:3,ac:0.5},ej:{sb:3,sc:0.4,ab:5,ac:0.8}};
 function thrCfg(){
   const d=DEF_THR[cfg.dir]||DEF_THR.je,c=(cfg.thr&&cfg.thr[cfg.dir])||{};
   const n=(v,x)=>(typeof v==='number'&&isFinite(v)&&v>=0&&v<=300)?v:x;
   return {sb:n(c.sb,d.sb),sc:n(c.sc,d.sc),ab:n(c.ab,d.ab),ac:n(c.ac,d.ac)};
 }
 function isCustomThr(){const t=thrCfg(),d=DEF_THR[cfg.dir]||DEF_THR.je;return t.sb!==d.sb||t.sc!==d.sc||t.ab!==d.ab||t.ac!==d.ac}
-function thresholds(v){const t=thrCfg(),L=fold(v).length,S=t.sb+t.sc*L;return {S,A:Math.max(S,t.ab+t.ac*L)}}
+const jaLen=s=>Array.from(String(s||'').normalize('NFKC').replace(/\s/g,'')).length;   // 英語→日本語: 回答した日本語の文字数
+function thresholds(v){const t=thrCfg(),L=typeof v==='number'?v:fold(v).length,S=t.sb+t.sc*L;return {S,A:Math.max(S,t.ab+t.ac*L)}}
 function thrRulesText(){
   const t=thrCfg();
-  return `<b>定着</b>は ${t.sb}秒＋${t.sc}秒×英語の文字数 以内、<b>正解</b>は ${t.ab}秒＋${t.ac}秒×英語の文字数 以内、それより遅い正解は<b>難しい</b>です。${cfg.dir==='ej'?'(英語→日本語は日本語入力の時間を見込んで、標準の基準を長めにしています)':''}`;
+  const u=cfg.dir==='ej'?'回答した日本語の文字数':'英語の文字数';
+  return `<b>定着</b>は ${t.sb}秒＋${t.sc}秒×${u} 以内、<b>正解</b>は ${t.ab}秒＋${t.ac}秒×${u} 以内、それより遅い正解は<b>難しい</b>です。`;
 }
 function thrSettingsHTML(){
   const t=thrCfg();
   const inp=(id,v,lab)=>`<label class="thrf">${lab}<input type="number" id="${id}" step="0.1" min="0" max="300" value="${v}" inputmode="decimal"></label>`;
   return `<div class="thrset" id="thrset">
     <p class="note">回答にかかった時間で、<b>定着</b>・<b>正解</b>・<b>難しい</b>を分けています。自分に合う秒数に変えられます。変更は、この出題方向の今後の回答から有効です。</p>
-    <div class="thrgrid">${inp('t-sb',t.sb,'定着: 基本(秒)')}${inp('t-sc',t.sc,'定着: 1文字ごとに+(秒)')}${inp('t-ab',t.ab,'正解: 基本(秒)')}${inp('t-ac',t.ac,'正解: 1文字ごとに+(秒)')}</div>
+    <div class="thrgrid">${inp('t-sb',t.sb,'定着: 基本(秒)')}${inp('t-sc',t.sc,'定着: '+(cfg.dir==='ej'?'回答した日本語':'英語')+'の1文字ごとに+(秒)')}${inp('t-ab',t.ab,'正解: 基本(秒)')}${inp('t-ac',t.ac,'正解: '+(cfg.dir==='ej'?'回答した日本語':'英語')+'の1文字ごとに+(秒)')}</div>
     <p class="note" id="threx"></p>
     <button class="btn" id="thrreset" type="button">標準に戻す</button></div>`;
 }
 function bindThr(){
   const ids={sb:'#t-sb',sc:'#t-sc',ab:'#t-ab',ac:'#t-ac'};
   const upd=()=>{
-    const t=thresholds('abcdefg'),c=thrCfg();
+    const t=thresholds(7),c=thrCfg();
     const ex=document.getElementById('threx');
-    if(ex)ex.textContent=`例: 7文字の単語 → 定着 ${t.S.toFixed(1)}秒以内 / 正解 ${t.A.toFixed(1)}秒以内 / それより遅いと難しい。${(c.ab<c.sb||c.ac<c.sc)?'(正解の秒数は、定着以上になるよう自動で調整されます)':''}${isCustomThr()?'(標準から変更中)':''}`;
+    if(ex)ex.textContent=`例: ${cfg.dir==='ej'?'日本語を7文字で回答':'7文字の単語'} → 定着 ${t.S.toFixed(1)}秒以内 / 正解 ${t.A.toFixed(1)}秒以内 / それより遅いと難しい。${(c.ab<c.sb||c.ac<c.sc)?'(正解の秒数は、定着以上になるよう自動で調整されます)':''}${isCustomThr()?'(標準から変更中)':''}`;
     const tx=document.getElementById('thrtext');if(tx)tx.innerHTML=thrRulesText();
   };
   for(const k in ids)$(ids[k]).addEventListener('input',e=>{
@@ -511,7 +528,7 @@ function home(){
   $('#app').innerHTML=`
     <div class="head"><div><h1 class="title">英単語 書き取り</h1>
       <p class="lead">${cfg.dir==='ej'?'英語を見て、日本語の意味を書く。':'日本語の意味を見て、英語のつづりを書く。'}</p></div>
-      <button type="button" class="gear" id="gear" aria-label="設定" aria-haspopup="dialog">${GEAR_SVG}</button></div>
+      <div class="headr">${acctBtnHTML()}<button type="button" class="gear" id="gear" aria-label="設定" aria-haspopup="dialog">${GEAR_SVG}</button></div></div>
     <div class="seg dir" id="dir" aria-label="出題方向"><button type="button" data-dir="je" aria-pressed="${cfg.dir==='je'}">日本語 → 英語</button><button type="button" data-dir="ej" aria-pressed="${cfg.dir==='ej'}">英語 → 日本語</button></div>
     ${learner.consent===null?consentHTML():''}
     <div class="books" id="books" role="radiogroup" aria-label="単語帳">${books}</div>
@@ -519,10 +536,12 @@ function home(){
       <button type="button" role="tab" data-tab="today" aria-selected="${cfg.tab==='today'}">今日の学習</button>
       <button type="button" role="tab" data-tab="free" aria-selected="${cfg.tab==='free'}">自由練習</button>
       <button type="button" role="tab" data-tab="test" aria-selected="${cfg.tab==='test'}">確認テスト</button>
+      ${ACCT_ON?`<button type="button" role="tab" data-tab="rank" aria-selected="${cfg.tab==='rank'}">ランキング</button>`:''}
       <button type="button" role="tab" data-tab="log" aria-selected="${cfg.tab==='log'}">記録</button>
     </div>
     <section class="paper panel" id="panel"></section>`;
   $('#gear').onclick=()=>openSettings();
+  if(ACCT_ON)$('#acctbtn').onclick=()=>openAccount();
   $('#books').addEventListener('click',e=>{
     const x=e.target.closest('.book');if(!x||x.dataset.book===cfg.book)return;
     cfg.book=x.dataset.book;saveCfg();home();
@@ -542,6 +561,179 @@ function home(){
   flushUpload();
 }
 
+
+/* ---------- ログイン・ランキング(Web公開版だけ) ---------- */
+const ACCT_ON=!!COLLECT_URL;
+const ACCTKEY='eitango-kakitori:acct1';
+let acct=lsGet(ACCTKEY,null);
+function saveAcct(){if(acct)lsSet(ACCTKEY,acct);else{try{localStorage.removeItem(ACCTKEY)}catch(e){}}}
+async function api(a,payload){
+  if(!COLLECT_URL)return {ok:false,err:'disabled'};
+  let res;
+  try{res=await fetch(COLLECT_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(Object.assign({a},payload))})}
+  catch(e){return {ok:false,err:'network'}}
+  try{return await res.json()}catch(e){return {ok:false,err:'bad_response'}}
+}
+async function pwKey(name,pw){
+  const subtle=(typeof crypto!=='undefined'&&crypto.subtle);
+  if(!subtle)throw new Error('nocrypto');
+  const enc=new TextEncoder();
+  const key=await subtle.importKey('raw',enc.encode(pw),'PBKDF2',false,['deriveBits']);
+  const bits=await subtle.deriveBits({name:'PBKDF2',salt:enc.encode('eitango-kakitori|'+name.toLowerCase()),iterations:100000,hash:'SHA-256'},key,256);
+  return Array.from(new Uint8Array(bits)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+const AUTHERR={
+  name_taken:'そのニックネームはすでに使われています。',
+  bad_login:'ニックネームまたはパスワードが違います。',
+  too_many:'失敗が続いたため、しばらく(10分ほど)ログインできません。',
+  bad_name:'ニックネームは2〜16文字で、文字・数字・_ - が使えます。',
+  bad_pw:'パスワードの形式が正しくありません。',
+  network:'通信できませんでした。電波の状態を確認して、もう一度試してください。',
+  server:'サーバーでエラーが出ました。時間をおいて試してください。',
+  disabled:'このページではログインを使えません。',
+  unknown_action:'サーバーのスクリプトが古いようです(作成者に更新を依頼してください)。',
+  bad_token:'ログインの有効期限が切れました。もう一度ログインしてください。',
+  bad_response:'サーバーの返答を読み取れませんでした。Apps Script を最新のコード(v2)に更新して、「新バージョン」でデプロイしたか確認してください。',
+};
+async function doAuth(kind,name,pw,wantConsent){
+  name=String(name||'').trim();
+  if(!/^[0-9A-Za-zぁ-んァ-ヶー一-龠_\-]{2,16}$/.test(name))return {ok:false,msg:AUTHERR.bad_name};
+  if(String(pw||'').length<8)return {ok:false,msg:'パスワードは8文字以上にしてください。'};
+  if(learner.consent!==true&&!wantConsent)return {ok:false,msg:'ランキングに参加するには、学習データの記録への同意が必要です。'};
+  let key;
+  try{key=await pwKey(name,pw)}catch(e){return {ok:false,msg:'このブラウザではログインを使えません(https:// のページで開いてください)。'}}
+  const r=await api(kind,{name,pw:key});
+  if(!r||!r.ok)return {ok:false,msg:AUTHERR[r&&r.err]||('ログインできませんでした。'+(r&&r.err?`(${r.err})`:''))};
+  acct={id:r.acct,name:r.name,tok:r.tok,exp:r.exp};saveAcct();
+  if(learner.consent!==true){learner.consent=true;saveLearner()}
+  flushUpload();
+  return {ok:true};
+}
+async function doLogout(){
+  if(acct&&acct.tok&&!acct.expired)await api('logout',{tok:acct.tok,acct:acct.id});
+  acct=null;saveAcct();
+}
+async function doDeleteAccount(){
+  if(acct&&acct.tok){const r=await api('delete',{tok:acct.tok,acct:acct.id});if(!r.ok&&r.err!=='bad_token')return r}
+  acct=null;saveAcct();return {ok:true};
+}
+function acctBtnHTML(){
+  if(!ACCT_ON)return '';
+  const t=!acct?'ログイン':acct.expired?'再ログイン':esc(acct.name);
+  return `<button type="button" class="acct" id="acctbtn" aria-haspopup="dialog">${t}</button>`;
+}
+function openAccount(){
+  const ov=document.getElementById('ov');if(!ov)return;
+  let mode='login';
+  const msg=t=>{const m=document.getElementById('a-msg');if(m)m.textContent=t};
+  const render=()=>{
+    if(acct&&!acct.expired){
+      ov.innerHTML=`<div class="sheet"><div class="sheethead"><h2>アカウント</h2><button type="button" class="btn" id="ovclose">閉じる</button></div>
+        <p>ログイン中: <b>${esc(acct.name)}</b></p>
+        <p class="note">ニックネームは、ランキングに表示されます。</p>
+        <div class="stack"><button type="button" class="btn primary" id="ac-rank">ランキングを見る</button><button type="button" class="btn" id="ac-out">ログアウト</button><button type="button" class="btn" id="ac-del">アカウントを削除</button></div>
+        <p class="note" id="a-msg" role="status"></p></div>`;
+      $('#ac-rank').onclick=()=>{cfg.tab='rank';saveCfg();closeSettings();home()};
+      $('#ac-out').onclick=async()=>{await doLogout();closeSettings();home()};
+      let armed=false;
+      $('#ac-del').onclick=async()=>{
+        if(!armed){armed=true;$('#ac-del').textContent='もう一度押すと、アカウントを削除します';setTimeout(()=>{armed=false;const b=document.getElementById('ac-del');if(b)b.textContent='アカウントを削除'},4000);return}
+        const r=await doDeleteAccount();
+        if(!r.ok){msg(AUTHERR[r.err]||'削除できませんでした。');return}
+        closeSettings();home();
+      };
+    }else{
+      const need=learner.consent!==true;
+      ov.innerHTML=`<div class="sheet"><div class="sheethead"><h2>ログイン</h2><button type="button" class="btn" id="ovclose">閉じる</button></div>
+        ${acct&&acct.expired?'<p class="note" style="color:var(--red)">ログインの有効期限が切れました。もう一度ログインしてください。</p>':''}
+        <div class="seg" id="seg-auth"><button type="button" data-m="login" aria-pressed="${mode==='login'}">ログイン</button><button type="button" data-m="register" aria-pressed="${mode==='register'}">新規登録</button></div>
+        <label class="thrf" style="margin-top:12px">ニックネーム(ランキングに表示されます。本名は使わないでください)<input type="text" id="a-name" maxlength="16" autocomplete="username" spellcheck="false" value="${esc(acct?acct.name:'')}"></label>
+        <label class="thrf" style="margin-top:8px">パスワード(8文字以上)<input type="password" id="a-pw" autocomplete="${mode==='login'?'current-password':'new-password'}"></label>
+        ${need?'<label class="check" style="margin-top:8px"><input type="checkbox" id="a-consent"> 学習データの記録に同意する(ランキングに必要)</label>':''}
+        <p class="note" id="a-msg" role="status"></p>
+        <button type="button" class="btn primary start" id="a-go" style="margin-top:8px">${mode==='login'?'ログイン':'登録してログイン'}</button>
+        <p class="note" style="margin-top:10px">パスワードは、この端末で変換してから送信し、サーバーには元のパスワードを保存しません。ただし、他のサービスと同じパスワードは使わないでください。</p></div>`;
+      $('#seg-auth').addEventListener('click',e=>{const x=e.target.closest('button');if(!x)return;mode=x.dataset.m;render()});
+      const go=async()=>{
+        const btn=$('#a-go');btn.disabled=true;msg('通信中…');
+        const cb=document.getElementById('a-consent');
+        const r=await doAuth(mode,$('#a-name').value,$('#a-pw').value,!!(cb&&cb.checked));
+        btn.disabled=false;
+        if(!r.ok){msg(r.msg);return}
+        closeSettings();home();
+      };
+      $('#a-go').onclick=go;
+      $('#a-pw').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.isComposing&&e.keyCode!==229){e.preventDefault();go()}});
+    }
+    $('#ovclose').onclick=closeSettings;
+    ov.onclick=e=>{if(e.target===ov)closeSettings()};
+  };
+  render();
+  ov.hidden=false;document.body.style.overflow='hidden';
+  const f=document.getElementById('a-name')||document.getElementById('ovclose');if(f&&f.focus)f.focus();
+}
+
+let rankData=null,rankSel='cur';
+const monthLabel=mk=>{const p=String(mk).split('-');return `${p[0]}年${+p[1]}月`};
+function rankRulesHTML(){
+  return `<details class="rules"><summary>スコアのルール</summary><ul>
+    <li>学習時間: 1時間ごとに <b>+5</b>(回答の間隔で数えます。2分以上の放置は、2分までしか数えません)。</li>
+    <li>その英単語を1度でも学習した: <b>+0.1</b></li>
+    <li>その英単語を定着させた(復習の間隔が5日以上になった): 必須・ターゲット1900 <b>+0.3</b> / 上級・EX2400・パス単1900 <b>+0.35</b> / 最上級・ターゲット1000 <b>+0.4</b></li>
+    <li>その英単語を完全定着させた: 必須・ターゲット1900 <b>+0.5</b> / 上級・EX2400・パス単1900 <b>+0.6</b> / 最上級・ターゲット1000 <b>+0.7</b>(上の定着の点数にさらに加わります)</li>
+    <li>1つの単語帳の半分以上を定着させた: <b>+100</b>、すべて定着させた: <b>+500</b>(半分のボーナスにさらに加わります)</li>
+    <li>日本語→英語と英語→日本語は、別々に数えます。単語の点数は「今日の学習」の回答だけが対象です(学習時間は、自由練習・確認テストも数えます)。</li>
+    <li>「今月」は毎月1日(日本時間)にリセットされます。「通算」は全期間の合計です。</li>
+    </ul></details>`;
+}
+async function rankPanel(){
+  if(!acct||acct.expired){
+    $('#panel').innerHTML=`<p class="note" style="margin-top:0">ランキングに参加するには、ログインが必要です。学習の記録(回答・時間)がサーバーに送られ、スコアが計算されます。</p>
+      <button type="button" class="btn primary start" id="rk-login">ログイン / 新規登録</button>${rankRulesHTML()}`;
+    $('#rk-login').onclick=()=>openAccount();
+    return;
+  }
+  const seg=[['cur','今月'],['prev','先月'],['total','通算']].map(([v,l])=>`<button type="button" data-k="${v}" aria-pressed="${rankSel===v}">${l}</button>`).join('');
+  $('#panel').innerHTML=`<div class="seg" id="rk-seg">${seg}</div><div id="rk-body" style="margin-top:12px"><p class="note">読み込み中…</p></div>
+    <div class="row2"><button type="button" class="btn" id="rk-refresh">更新</button></div>${rankRulesHTML()}`;
+  $('#rk-seg').addEventListener('click',e=>{
+    const x=e.target.closest('button');if(!x)return;rankSel=x.dataset.k;
+    $('#rk-seg').querySelectorAll('button').forEach(y=>y.setAttribute('aria-pressed',y===x));renderRank();
+  });
+  $('#rk-refresh').onclick=loadRank;
+  await loadRank();
+}
+async function loadRank(){
+  const body=()=>document.getElementById('rk-body');
+  if(body())body().innerHTML='<p class="note">読み込み中…</p>';
+  await flushUpload();
+  const r=await api('rank',{tok:acct.tok,acct:acct.id});
+  if(!body())return;
+  if(!r.ok){
+    if(r.err==='bad_token'){acct.expired=true;saveAcct();home();return}
+    body().innerHTML=`<p class="note" style="color:var(--red)">${esc(AUTHERR[r.err]||'ランキングを読み込めませんでした。')}</p>`;return;
+  }
+  rankData=r;renderRank();
+}
+function renderRank(){
+  const el=document.getElementById('rk-body');if(!el||!rankData)return;
+  const L=rankData.lists[rankSel],label=rankSel==='cur'?monthLabel(rankData.cur):rankSel==='prev'?monthLabel(rankData.prev):'通算';
+  const f=v=>(Math.round(v*10)/10).toFixed(1);
+  const rows=L.top.map(r=>`<tr${r.me?' class="me"':''}><td>${r.rank}</td><td>${esc(r.name)}${r.me?'(あなた)':''}</td><td>${f(r.score)}</td></tr>`).join('');
+  const me=L.me,inTop=L.top.some(r=>r.me);
+  const b=me&&me.b;
+  el.innerHTML=`<p class="note" style="margin:0 0 6px">${label}のランキング(参加 ${L.n}人)</p>
+    <div class="scroll"><table class="rank"><tr><th>順位</th><th>ニックネーム</th><th>スコア</th></tr>${rows||'<tr><td colspan="3">まだ記録がありません</td></tr>'}</table></div>
+    ${me&&!inTop?`<p class="note" style="margin-top:8px">あなたの順位: ${me.rank?me.rank+'位':'ランク外(スコア0)'}(${f(me.score)})</p>`:''}
+    ${b?`<p class="note" style="margin:12px 0 4px">あなたのスコアの内訳(${label})</p>
+    <div class="plan-grid" style="margin-top:4px">
+      <div class="stat"><span class="k">学習時間</span><span class="v">${b.hours.toFixed(2)}<small>時間</small></span><span class="s">+${f(b.pTime)}</span></div>
+      <div class="stat"><span class="k">学習した単語</span><span class="v">${b.learn}<small>語</small></span><span class="s">+${f(b.pLearn)}</span></div>
+      <div class="stat"><span class="k">定着した単語</span><span class="v">${b.reach}<small>語</small></span><span class="s">+${f(b.pReach)}</span></div>
+      <div class="stat"><span class="k">完全定着した単語</span><span class="v">${b.mast}<small>語</small></span><span class="s">+${f(b.pMast)}</span></div>
+      <div class="stat"><span class="k">単語帳ボーナス</span><span class="v">${b.half+b.all}<small>回</small></span><span class="s">+${f(b.pBonus)}</span></div>
+      <div class="stat"><span class="k">合計スコア</span><span class="v">${f(b.score)}</span></div></div>`:''}`;
+}
 
 /* ---------- 設定(右上の歯車) ---------- */
 function settingsHTML(){
@@ -640,7 +832,7 @@ function bindTestSet(){
 }
 function bindLinks(){document.querySelectorAll('[data-set]').forEach(x=>{x.onclick=()=>openSettings(x.dataset.set)})}
 
-function panel(){({today:todayPanel,free:freePanel,test:testPanel,log:logPanel}[cfg.tab]||todayPanel)()}
+function panel(){({today:todayPanel,free:freePanel,test:testPanel,log:logPanel,rank:ACCT_ON?rankPanel:todayPanel}[cfg.tab]||todayPanel)()}
 
 function todayPanel(){
   $('#panel').innerHTML=`
@@ -1090,7 +1282,7 @@ function finalize(e,r){
   S.phase='feedback'; S.ctl=null;
   $('#ans').disabled=true;
   const snap=takeSnap(e);
-  const v=ej?variants(en)[0]:r.v;
+  const v=ej?jaLen(r.raw||''):r.v;   // 英日は、回答した日本語の文字数で判定
   let g,msg='',meta='',insIdx=null;
   if(S.mode==='srs'){
     g=gradeOf(r.ok,r.sec,v);
